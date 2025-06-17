@@ -1134,7 +1134,7 @@ function App() {
   const dashboardRef = useRef(null);
   const listRef = useRef(null);
   const chatRef = useRef(null);
-  
+
   // Add these scroll functions
   const scrollToDashboard = () => {
     dashboardRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1176,7 +1176,9 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get("https://backend-git.onrender.com/api/data");
+        const response = await axios.get(
+          "https://backend-git.onrender.com/api/data"
+        );
         setData(Array.isArray(response.data) ? response.data : []);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -1220,67 +1222,98 @@ function App() {
       return "#FBEE95"; // สีเหลือง
     }
     return ""; // ไม่มีสี (ค่าปกติ)
-  };  
+  };
 
   // ดึงข้อมูลจาก PostgreSQL ทุก 10 วิ
   useEffect(() => {
-    const sync = () => {
-      axios
-        .get("https://backend-git.onrender.com/sync-tickets")
-        .then((response) => {
-          console.log("✅ Synced from Google Sheets");
-          setLastSync(new Date());
+    // ในส่วนของฟังก์ชัน sync ใน useEffect
+    const sync = async () => {
+      try {
+        const response = await axios.get(
+          "https://backend-git.onrender.com/sync-tickets"
+        );
+        console.log("✅ Synced from Google Sheets");
+        setLastSync(new Date());
 
-          const newData = Array.isArray(response?.data) ? response.data : [];
+        const newData = Array.isArray(response?.data) ? response.data : [];
 
-          axios
-            .post("https://backend-git.onrender.com/clear-textboxes")
-            .then((res) => {
-              if (res.data.cleared_count > 0) {
-                console.log(`✅ Cleared ${res.data.cleared_count} textboxes`);
+        try {
+          const clearRes = await axios.post(
+            "https://backend-git.onrender.com/clear-textboxes",
+            {},
+            {
+              headers: {
+                "Content-Type": "application/json",
+              },
+              withCredentials: true, // เพิ่มนี้ถ้า backend ต้องการ credentials
+            }
+          );
+
+          if (clearRes.data?.cleared_count > 0) {
+            console.log(`✅ Cleared ${clearRes.data.cleared_count} textboxes`);
+          }
+        } catch (err) {
+          console.error("Textbox clear error:", err);
+          // ลองอีกครั้งหลังจาก delay สั้นๆ
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          try {
+            const retryRes = await axios.post(
+              "https://backend-git.onrender.com/clear-textboxes",
+              {},
+              {
+                headers: {
+                  "Content-Type": "application/json",
+                },
               }
-            })
-            .catch((err) => console.error("Textbox clear error:", err));
+            );
+            console.log(
+              `✅ Retry cleared ${retryRes.data?.cleared_count || 0} textboxes`
+            );
+          } catch (retryErr) {
+            console.error("Retry textbox clear error:", retryErr);
+          }
+        }
 
-          setData((prevData) => {
-            const textboxUpdates = [];
+        setData((prevData) => {
+          const textboxUpdates = [];
 
-            if (Array.isArray(prevData) && Array.isArray(newData)) {
-              newData.forEach((newTicket) => {
-                const oldTicket = prevData.find(
-                  (t) => t["Ticket ID"] === newTicket["Ticket ID"]
-                );
-                // เพิ่มเงื่อนไขตรวจสอบว่า TEXTBOX มีค่าหรือไม่
-                if (
-                  oldTicket &&
-                  newTicket.TEXTBOX &&
-                  newTicket.TEXTBOX !== oldTicket.TEXTBOX
-                ) {
-                  textboxUpdates.push({
-                    id: Date.now() + Math.random(),
-                    message: `New message for ticket ${newTicket["Ticket ID"]}: ${newTicket.TEXTBOX}`,
-                    timestamp: new Date().toISOString(),
-                    read: false,
-                  });
-                }
-              });
-            }
+          if (Array.isArray(prevData) && Array.isArray(newData)) {
+            newData.forEach((newTicket) => {
+              const oldTicket = prevData.find(
+                (t) => t["Ticket ID"] === newTicket["Ticket ID"]
+              );
+              if (
+                oldTicket &&
+                newTicket.TEXTBOX &&
+                newTicket.TEXTBOX !== oldTicket.TEXTBOX
+              ) {
+                textboxUpdates.push({
+                  id: Date.now() + Math.random(),
+                  message: `New message for ticket ${newTicket["Ticket ID"]}: ${newTicket.TEXTBOX}`,
+                  timestamp: new Date().toISOString(),
+                  read: false,
+                });
+              }
+            });
+          }
 
-            if (textboxUpdates.length > 0) {
-              setNotifications((prev) => [...textboxUpdates, ...prev]);
-              setHasUnread(true);
+          if (textboxUpdates.length > 0) {
+            setNotifications((prev) => [...textboxUpdates, ...prev]);
+            setHasUnread(true);
 
-              // Play notification sound
-              const audio = new Audio("/notification.mp3");
-              audio.play().catch((e) => console.log("Audio play failed:", e));
-            }
+            // Play notification sound
+            const audio = new Audio("/notification.mp3");
+            audio.play().catch((e) => console.log("Audio play failed:", e));
+          }
 
-            return newData;
-          });
-        })
-        .catch((err) => {
-          console.error("Sync error:", err);
+          return newData;
         });
+      } catch (err) {
+        console.error("Sync error:", err);
+        // ลอง sync อีกครั้งหลังจาก delay
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        sync();
+      }
     };
 
     sync();
@@ -1447,7 +1480,9 @@ function App() {
 
   const deleteNotification = async (id) => {
     try {
-      await axios.post("https://backend-git.onrender.com/delete-notification", { id });
+      await axios.post("https://backend-git.onrender.com/delete-notification", {
+        id,
+      });
       setNotifications(notifications.filter((n) => n.id !== id));
     } catch (err) {
       console.error("Error deleting notification:", err);
@@ -1524,17 +1559,23 @@ function App() {
       if (!selectedUser) return;
 
       try {
-        const response = await axios.get("https://backend-git.onrender.com/api/messages", {
-          params: { ticket_id: selectedUser },
-        });
+        const response = await axios.get(
+          "https://backend-git.onrender.com/api/messages",
+          {
+            params: { ticket_id: selectedUser },
+          }
+        );
         setMessages(response.data);
 
         // ทำเครื่องหมายว่าข้อความถูกอ่านแล้ว
         if (response.data.length > 0) {
-          await axios.post("https://backend-git.onrender.com/api/messages/mark-read", {
-            ticket_id: selectedUser,
-            admin_id: adminId,
-          });
+          await axios.post(
+            "https://backend-git.onrender.com/api/messages/mark-read",
+            {
+              ticket_id: selectedUser,
+              admin_id: adminId,
+            }
+          );
         }
       } catch (err) {
         console.error("Failed to load messages:", err);
