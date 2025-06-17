@@ -1220,7 +1220,7 @@ function App() {
       return "#FBEE95"; // สีเหลือง
     }
     return ""; // ไม่มีสี (ค่าปกติ)
-  };
+  };  
 
   // ดึงข้อมูลจาก PostgreSQL ทุก 10 วิ
   useEffect(() => {
