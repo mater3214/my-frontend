@@ -1173,6 +1173,36 @@ function App() {
     [notificationPosition.x, notificationPosition.y]
   );
 
+  axios.post(
+    "https://backend-git.onrender.com/clear-textboxes",
+    {},
+    {
+      headers: {
+        "Content-Type": "application/json",
+      },
+      // Remove withCredentials
+    }
+  );
+
+  // Add global error handler
+  axios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      console.error("API Error:", error);
+      if (error.response) {
+        // Handle specific status codes
+        if (error.response.status === 500) {
+          alert("Server error occurred. Please try again later.");
+        }
+      } else if (error.request) {
+        alert("Network error. Please check your connection.");
+      }
+      return Promise.reject(error);
+    }
+  );
+
+  
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -1245,7 +1275,7 @@ function App() {
               headers: {
                 "Content-Type": "application/json",
               },
-              withCredentials: true, // เพิ่มนี้ถ้า backend ต้องการ credentials
+              // ไม่ต้องใช้ withCredentials: true เพราะเราไม่ได้ใช้ cookies
             }
           );
 
@@ -1271,6 +1301,17 @@ function App() {
             );
           } catch (retryErr) {
             console.error("Retry textbox clear error:", retryErr);
+            // แสดงข้อความแจ้งเตือนผู้ใช้
+            setNotifications((prev) => [
+              ...prev,
+              {
+                id: Date.now(),
+                message: "Failed to clear textboxes. Please try again later.",
+                timestamp: new Date().toISOString(),
+                read: false,
+              },
+            ]);
+            setHasUnread(true);
           }
         }
 
@@ -1506,6 +1547,46 @@ function App() {
           console.error("❌ Failed to delete ticket:", err);
           alert("Failed to delete ticket: " + err.message);
         });
+    }
+  };
+
+  const handleApiError = (error, context) => {
+    console.error(`Error in ${context}:`, error);
+    let errorMessage = "An unexpected error occurred";
+
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      errorMessage = error.response.data?.message || error.response.statusText;
+    } else if (error.request) {
+      // The request was made but no response was received
+      errorMessage = "No response from server";
+    } else {
+      // Something happened in setting up the request
+      errorMessage = error.message;
+    }
+
+    setNotifications((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        message: `${context} failed: ${errorMessage}`,
+        timestamp: new Date().toISOString(),
+        read: false,
+      },
+    ]);
+    setHasUnread(true);
+  };
+
+  // ใช้ในทุก API call แทน try-catch ปกติ
+  const fetchData = async () => {
+    try {
+      const response = await axios.get(
+        "https://backend-git.onrender.com/api/data"
+      );
+      setData(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      handleApiError(error, "fetching data");
+      setData([]);
     }
   };
 
