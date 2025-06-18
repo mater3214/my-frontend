@@ -1134,7 +1134,7 @@ function App() {
   const dashboardRef = useRef(null);
   const listRef = useRef(null);
   const chatRef = useRef(null);
-  
+
   // Add these scroll functions
   const scrollToDashboard = () => {
     dashboardRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1176,10 +1176,17 @@ function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get("https://my-backend-1-m89f.onrender.com/api/data");
+        const response = await axios.get(
+          "https://my-backend-1-m89f.onrender.com/api/data",
+          {
+            timeout: 10000, // 10 seconds timeout
+          }
+        );
         setData(Array.isArray(response.data) ? response.data : []);
       } catch (error) {
         console.error("Error fetching data:", error);
+        // แสดงข้อความ error ให้ผู้ใช้รู้
+        alert("ไม่สามารถโหลดข้อมูลได้ โปรดลองใหม่ภายหลัง");
         setData([]); // Fallback to empty array
       }
     };
@@ -1360,7 +1367,9 @@ function App() {
     if (id) {
       // Mark single notification as read
       axios
-        .post("https://my-backend-1-m89f.onrender.com/mark-notification-read", { id })
+        .post("https://my-backend-1-m89f.onrender.com/mark-notification-read", {
+          id,
+        })
         .then(() => {
           setNotifications((prev) =>
             prev.map((n) => (n.id === id ? { ...n, read: true } : n))
@@ -1370,7 +1379,9 @@ function App() {
     } else {
       // Mark all notifications as read
       axios
-        .post("https://my-backend-1-m89f.onrender.com/mark-all-notifications-read")
+        .post(
+          "https://my-backend-1-m89f.onrender.com/mark-all-notifications-read"
+        )
         .then(() => {
           setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
           setHasUnread(false);
@@ -1447,7 +1458,10 @@ function App() {
 
   const deleteNotification = async (id) => {
     try {
-      await axios.post("https://my-backend-1-m89f.onrender.com/delete-notification", { id });
+      await axios.post(
+        "https://my-backend-1-m89f.onrender.com/delete-notification",
+        { id }
+      );
       setNotifications(notifications.filter((n) => n.id !== id));
     } catch (err) {
       console.error("Error deleting notification:", err);
@@ -1524,20 +1538,38 @@ function App() {
       if (!selectedUser) return;
 
       try {
-        const response = await axios.get("https://my-backend-1-m89f.onrender.com/api/messages", {
-          params: { ticket_id: selectedUser },
-        });
+        const response = await axios.get(
+          "https://my-backend-1-m89f.onrender.com/api/messages",
+          {
+            params: { ticket_id: selectedUser },
+            timeout: 5000,
+          }
+        );
         setMessages(response.data);
+
+        if (Array.isArray(response.data)) {
+          setMessages(response.data);
+        } else {
+          setMessages([]);
+        }
 
         // ทำเครื่องหมายว่าข้อความถูกอ่านแล้ว
         if (response.data.length > 0) {
-          await axios.post("https://my-backend-1-m89f.onrender.com/api/messages/mark-read", {
-            ticket_id: selectedUser,
-            admin_id: adminId,
-          });
+          await axios.post(
+            "https://my-backend-1-m89f.onrender.com/api/messages/mark-read",
+            {
+              ticket_id: selectedUser,
+              admin_id: adminId,
+            },
+            {
+              timeout: 5000,
+            }
+          );
         }
       } catch (err) {
         console.error("Failed to load messages:", err);
+        alert("ไม่สามารถโหลดข้อความได้ โปรดลองใหม่ภายหลัง");
+        setMessages([]);
       }
     };
 
