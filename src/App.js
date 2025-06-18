@@ -1193,6 +1193,29 @@ function App() {
     fetchData();
   }, []);
 
+  const syncData = async () => {
+    try {
+      const response = await axios.get(
+        "https://my-backend-1-m89f.onrender.com/sync-tickets",
+        {
+          timeout: 10000,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          withCredentials: true,
+        }
+      );
+
+      if (response.data && Array.isArray(response.data)) {
+        setData(response.data);
+        setLastSync(new Date());
+      }
+    } catch (err) {
+      console.error("Sync error:", err);
+      alert("ไม่สามารถซิงค์ข้อมูลได้ โปรดลองใหม่ภายหลัง");
+    }
+  };
+
   useEffect(() => {
     if (isDragging) {
       window.addEventListener("mousemove", handleMouseMove);
@@ -1299,9 +1322,21 @@ function App() {
     const fetchEmailRankings = async () => {
       try {
         const response = await axios.get(
-          "https://my-backend-1-m89f.onrender.com/api/email-rankings"
+          "https://my-backend-1-m89f.onrender.com/api/email-rankings",
+          {
+            timeout: 10000,
+            headers: {
+              "Content-Type": "application/json",
+            },
+            withCredentials: true,
+          }
         );
-        setEmailRankings(response.data);
+
+        if (response.data && Array.isArray(response.data)) {
+          setEmailRankings(response.data);
+        } else {
+          setEmailRankings([]);
+        }
       } catch (error) {
         console.error("Error fetching email rankings:", error);
         setEmailRankings([]);
@@ -1310,6 +1345,30 @@ function App() {
 
     fetchEmailRankings();
   }, [data]);
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await axios.get(
+        "https://my-backend-1-m89f.onrender.com/api/notifications",
+        {
+          timeout: 10000,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          withCredentials: true,
+        }
+      );
+
+      if (response.data && Array.isArray(response.data)) {
+        setNotifications(response.data);
+        const unread = response.data.some((notification) => !notification.read);
+        setHasUnread(unread);
+      }
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+      setNotifications([]);
+    }
+  };
 
   useEffect(() => {
     const fetchNotifications = () => {
@@ -1542,19 +1601,22 @@ function App() {
           "https://my-backend-1-m89f.onrender.com/api/messages",
           {
             params: { ticket_id: selectedUser },
-            timeout: 5000,
+            timeout: 10000,
+            headers: {
+              "Content-Type": "application/json",
+            },
+            withCredentials: true,
           }
         );
-        setMessages(response.data);
 
-        if (Array.isArray(response.data)) {
+        if (response.data && Array.isArray(response.data)) {
           setMessages(response.data);
         } else {
           setMessages([]);
         }
 
         // ทำเครื่องหมายว่าข้อความถูกอ่านแล้ว
-        if (response.data.length > 0) {
+        if (response.data && response.data.length > 0) {
           await axios.post(
             "https://my-backend-1-m89f.onrender.com/api/messages/mark-read",
             {
@@ -1562,13 +1624,16 @@ function App() {
               admin_id: adminId,
             },
             {
-              timeout: 5000,
+              timeout: 10000,
+              headers: {
+                "Content-Type": "application/json",
+              },
+              withCredentials: true,
             }
           );
         }
       } catch (err) {
         console.error("Failed to load messages:", err);
-        alert("ไม่สามารถโหลดข้อความได้ โปรดลองใหม่ภายหลัง");
         setMessages([]);
       }
     };
