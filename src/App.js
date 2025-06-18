@@ -1134,7 +1134,7 @@ function App() {
   const dashboardRef = useRef(null);
   const listRef = useRef(null);
   const chatRef = useRef(null);
-
+  
   // Add these scroll functions
   const scrollToDashboard = () => {
     dashboardRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1173,42 +1173,10 @@ function App() {
     [notificationPosition.x, notificationPosition.y]
   );
 
-  axios.post(
-    "https://backend-git.onrender.com/clear-textboxes",
-    {},
-    {
-      headers: {
-        "Content-Type": "application/json",
-      },
-      // Remove withCredentials
-    }
-  );
-
-  // Add global error handler
-  axios.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      console.error("API Error:", error);
-      if (error.response) {
-        // Handle specific status codes
-        if (error.response.status === 500) {
-          alert("Server error occurred. Please try again later.");
-        }
-      } else if (error.request) {
-        alert("Network error. Please check your connection.");
-      }
-      return Promise.reject(error);
-    }
-  );
-
-  
-
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get(
-          "https://backend-git.onrender.com/api/data"
-        );
+        const response = await axios.get("https://my-backend-1-m89f.onrender.com/api/data");
         setData(Array.isArray(response.data) ? response.data : []);
       } catch (error) {
         console.error("Error fetching data:", error);
@@ -1256,105 +1224,63 @@ function App() {
 
   // ดึงข้อมูลจาก PostgreSQL ทุก 10 วิ
   useEffect(() => {
-    // ในส่วนของฟังก์ชัน sync ใน useEffect
-    const sync = async () => {
-      try {
-        const response = await axios.get(
-          "https://backend-git.onrender.com/sync-tickets"
-        );
-        console.log("✅ Synced from Google Sheets");
-        setLastSync(new Date());
+    const sync = () => {
+      axios
+        .get("https://my-backend-1-m89f.onrender.com/sync-tickets")
+        .then((response) => {
+          console.log("✅ Synced from Google Sheets");
+          setLastSync(new Date());
 
-        const newData = Array.isArray(response?.data) ? response.data : [];
+          const newData = Array.isArray(response?.data) ? response.data : [];
 
-        try {
-          const clearRes = await axios.post(
-            "https://backend-git.onrender.com/clear-textboxes",
-            {},
-            {
-              headers: {
-                "Content-Type": "application/json",
-              },
-              // ไม่ต้องใช้ withCredentials: true เพราะเราไม่ได้ใช้ cookies
+          axios
+            .post("https://my-backend-1-m89f.onrender.com/clear-textboxes")
+            .then((res) => {
+              if (res.data.cleared_count > 0) {
+                console.log(`✅ Cleared ${res.data.cleared_count} textboxes`);
+              }
+            })
+            .catch((err) => console.error("Textbox clear error:", err));
+
+          setData((prevData) => {
+            const textboxUpdates = [];
+
+            if (Array.isArray(prevData) && Array.isArray(newData)) {
+              newData.forEach((newTicket) => {
+                const oldTicket = prevData.find(
+                  (t) => t["Ticket ID"] === newTicket["Ticket ID"]
+                );
+                // เพิ่มเงื่อนไขตรวจสอบว่า TEXTBOX มีค่าหรือไม่
+                if (
+                  oldTicket &&
+                  newTicket.TEXTBOX &&
+                  newTicket.TEXTBOX !== oldTicket.TEXTBOX
+                ) {
+                  textboxUpdates.push({
+                    id: Date.now() + Math.random(),
+                    message: `New message for ticket ${newTicket["Ticket ID"]}: ${newTicket.TEXTBOX}`,
+                    timestamp: new Date().toISOString(),
+                    read: false,
+                  });
+                }
+              });
             }
-          );
 
-          if (clearRes.data?.cleared_count > 0) {
-            console.log(`✅ Cleared ${clearRes.data.cleared_count} textboxes`);
-          }
-        } catch (err) {
-          console.error("Textbox clear error:", err);
-          // ลองอีกครั้งหลังจาก delay สั้นๆ
-          await new Promise((resolve) => setTimeout(resolve, 2000));
-          try {
-            const retryRes = await axios.post(
-              "https://backend-git.onrender.com/clear-textboxes",
-              {},
-              {
-                headers: {
-                  "Content-Type": "application/json",
-                },
-              }
-            );
-            console.log(
-              `✅ Retry cleared ${retryRes.data?.cleared_count || 0} textboxes`
-            );
-          } catch (retryErr) {
-            console.error("Retry textbox clear error:", retryErr);
-            // แสดงข้อความแจ้งเตือนผู้ใช้
-            setNotifications((prev) => [
-              ...prev,
-              {
-                id: Date.now(),
-                message: "Failed to clear textboxes. Please try again later.",
-                timestamp: new Date().toISOString(),
-                read: false,
-              },
-            ]);
-            setHasUnread(true);
-          }
-        }
+            if (textboxUpdates.length > 0) {
+              setNotifications((prev) => [...textboxUpdates, ...prev]);
+              setHasUnread(true);
 
-        setData((prevData) => {
-          const textboxUpdates = [];
+              // Play notification sound
+              const audio = new Audio("/notification.mp3");
+              audio.play().catch((e) => console.log("Audio play failed:", e));
+            }
 
-          if (Array.isArray(prevData) && Array.isArray(newData)) {
-            newData.forEach((newTicket) => {
-              const oldTicket = prevData.find(
-                (t) => t["Ticket ID"] === newTicket["Ticket ID"]
-              );
-              if (
-                oldTicket &&
-                newTicket.TEXTBOX &&
-                newTicket.TEXTBOX !== oldTicket.TEXTBOX
-              ) {
-                textboxUpdates.push({
-                  id: Date.now() + Math.random(),
-                  message: `New message for ticket ${newTicket["Ticket ID"]}: ${newTicket.TEXTBOX}`,
-                  timestamp: new Date().toISOString(),
-                  read: false,
-                });
-              }
-            });
-          }
-
-          if (textboxUpdates.length > 0) {
-            setNotifications((prev) => [...textboxUpdates, ...prev]);
-            setHasUnread(true);
-
-            // Play notification sound
-            const audio = new Audio("/notification.mp3");
-            audio.play().catch((e) => console.log("Audio play failed:", e));
-          }
-
-          return newData;
+            return newData;
+          });
+        })
+        .catch((err) => {
+          console.error("Sync error:", err);
         });
-      } catch (err) {
-        console.error("Sync error:", err);
-        // ลอง sync อีกครั้งหลังจาก delay
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-        sync();
-      }
     };
 
     sync();
@@ -1366,7 +1292,7 @@ function App() {
     const fetchEmailRankings = async () => {
       try {
         const response = await axios.get(
-          "https://backend-git.onrender.com/api/email-rankings"
+          "https://my-backend-1-m89f.onrender.com/api/email-rankings"
         );
         setEmailRankings(response.data);
       } catch (error) {
@@ -1381,7 +1307,7 @@ function App() {
   useEffect(() => {
     const fetchNotifications = () => {
       axios
-        .get("https://backend-git.onrender.com/api/notifications")
+        .get("https://my-backend-1-m89f.onrender.com/api/notifications")
         .then((res) => {
           setNotifications(res.data);
           // Check if there are any unread notifications
@@ -1401,7 +1327,7 @@ function App() {
     if (!startDate) return;
 
     axios
-      .get("https://backend-git.onrender.com/api/data-by-date", {
+      .get("https://my-backend-1-m89f.onrender.com/api/data-by-date", {
         params: { date: startDate },
       })
       .then((res) => {
@@ -1422,7 +1348,7 @@ function App() {
     setTypeFilter("all");
 
     axios
-      .get("https://backend-git.onrender.com/api/data")
+      .get("https://my-backend-1-m89f.onrender.com/api/data")
       .then((res) => setData(Array.isArray(res.data) ? res.data : []))
       .catch((err) => {
         console.error(err);
@@ -1434,7 +1360,7 @@ function App() {
     if (id) {
       // Mark single notification as read
       axios
-        .post("https://backend-git.onrender.com/mark-notification-read", { id })
+        .post("https://my-backend-1-m89f.onrender.com/mark-notification-read", { id })
         .then(() => {
           setNotifications((prev) =>
             prev.map((n) => (n.id === id ? { ...n, read: true } : n))
@@ -1444,7 +1370,7 @@ function App() {
     } else {
       // Mark all notifications as read
       axios
-        .post("https://backend-git.onrender.com/mark-all-notifications-read")
+        .post("https://my-backend-1-m89f.onrender.com/mark-all-notifications-read")
         .then(() => {
           setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
           setHasUnread(false);
@@ -1483,7 +1409,7 @@ function App() {
   const handleStatusChange = (ticketId, newStatus) => {
     axios
       .post(
-        "https://backend-git.onrender.com/update-status",
+        "https://my-backend-1-m89f.onrender.com/update-status",
         {
           ticket_id: ticketId,
           status: newStatus,
@@ -1521,9 +1447,7 @@ function App() {
 
   const deleteNotification = async (id) => {
     try {
-      await axios.post("https://backend-git.onrender.com/delete-notification", {
-        id,
-      });
+      await axios.post("https://my-backend-1-m89f.onrender.com/delete-notification", { id });
       setNotifications(notifications.filter((n) => n.id !== id));
     } catch (err) {
       console.error("Error deleting notification:", err);
@@ -1533,7 +1457,7 @@ function App() {
   const handleDeleteTicket = (ticketId) => {
     if (window.confirm("คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?")) {
       axios
-        .post("https://backend-git.onrender.com/delete-ticket", {
+        .post("https://my-backend-1-m89f.onrender.com/delete-ticket", {
           ticket_id: ticketId,
         })
         .then(() => {
@@ -1550,46 +1474,6 @@ function App() {
     }
   };
 
-  const handleApiError = (error, context) => {
-    console.error(`Error in ${context}:`, error);
-    let errorMessage = "An unexpected error occurred";
-
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      errorMessage = error.response.data?.message || error.response.statusText;
-    } else if (error.request) {
-      // The request was made but no response was received
-      errorMessage = "No response from server";
-    } else {
-      // Something happened in setting up the request
-      errorMessage = error.message;
-    }
-
-    setNotifications((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        message: `${context} failed: ${errorMessage}`,
-        timestamp: new Date().toISOString(),
-        read: false,
-      },
-    ]);
-    setHasUnread(true);
-  };
-
-  // ใช้ในทุก API call แทน try-catch ปกติ
-  const fetchData = async () => {
-    try {
-      const response = await axios.get(
-        "https://backend-git.onrender.com/api/data"
-      );
-      setData(Array.isArray(response.data) ? response.data : []);
-    } catch (error) {
-      handleApiError(error, "fetching data");
-      setData([]);
-    }
-  };
-
   const handleClearChat = async () => {
     if (!selectedUser) return;
 
@@ -1597,7 +1481,7 @@ function App() {
       try {
         // ลบข้อความทั้งหมดในตาราง messages ที่เกี่ยวข้องกับ ticket_id นี้
         await axios.post(
-          "https://backend-git.onrender.com/api/messages/delete",
+          "https://my-backend-1-m89f.onrender.com/api/messages/delete",
           {
             ticket_id: selectedUser,
           },
@@ -1613,7 +1497,7 @@ function App() {
 
         // อัปเดต textbox ในตาราง tickets เป็นค่าว่าง
         await axios.post(
-          "https://backend-git.onrender.com/update-textbox",
+          "https://my-backend-1-m89f.onrender.com/update-textbox",
           {
             ticket_id: selectedUser,
             textbox: "",
@@ -1640,23 +1524,17 @@ function App() {
       if (!selectedUser) return;
 
       try {
-        const response = await axios.get(
-          "https://backend-git.onrender.com/api/messages",
-          {
-            params: { ticket_id: selectedUser },
-          }
-        );
+        const response = await axios.get("https://my-backend-1-m89f.onrender.com/api/messages", {
+          params: { ticket_id: selectedUser },
+        });
         setMessages(response.data);
 
         // ทำเครื่องหมายว่าข้อความถูกอ่านแล้ว
         if (response.data.length > 0) {
-          await axios.post(
-            "https://backend-git.onrender.com/api/messages/mark-read",
-            {
-              ticket_id: selectedUser,
-              admin_id: adminId,
-            }
-          );
+          await axios.post("https://my-backend-1-m89f.onrender.com/api/messages/mark-read", {
+            ticket_id: selectedUser,
+            admin_id: adminId,
+          });
         }
       } catch (err) {
         console.error("Failed to load messages:", err);
@@ -1680,7 +1558,7 @@ function App() {
 
       try {
         const response = await axios.post(
-          "https://backend-git.onrender.com/send-announcement",
+          "https://my-backend-1-m89f.onrender.com/send-announcement",
           { message: chatMessage },
           { headers: { "Content-Type": "application/json" } }
         );
@@ -1712,7 +1590,7 @@ function App() {
     try {
       // 1. อัปเดต Textbox
       await axios.post(
-        "https://backend-git.onrender.com/update-textbox",
+        "https://my-backend-1-m89f.onrender.com/update-textbox",
         {
           ticket_id: selectedUser,
           textbox: chatMessage,
@@ -1726,7 +1604,7 @@ function App() {
 
       // 2. เพิ่มข้อความใหม่ในระบบ messages
       const messageResponse = await axios.post(
-        "https://backend-git.onrender.com/api/messages",
+        "https://my-backend-1-m89f.onrender.com/api/messages",
         {
           ticket_id: selectedUser,
           admin_id: adminId,
@@ -1754,7 +1632,7 @@ function App() {
 
       // 4. Clear the textbox in the database
       await axios.post(
-        "https://backend-git.onrender.com/update-textbox",
+        "https://my-backend-1-m89f.onrender.com/update-textbox",
         {
           ticket_id: selectedUser,
           textbox: "",
@@ -1782,7 +1660,7 @@ function App() {
 
     try {
       const response = await axios.post(
-        "https://backend-git.onrender.com/refresh-messages",
+        "https://my-backend-1-m89f.onrender.com/refresh-messages",
         {
           ticket_id: selectedUser,
           admin_id: adminId,
